@@ -2,10 +2,15 @@
 
 //------------------------------------------------------------------------------
 #include "debug.h"
+#include "comm.h"
+
 //------------------------------------------------------------------------------
 // include FTDI libraries
 //
 #include "LibFT260.h"
+
+
+#define MASK_1 0x0f
 
 WORD FT260_Vid = 0x0403;
 WORD FT260_Pid = 0x6030;
@@ -96,6 +101,70 @@ const char* FT260StatusToString(FT260_STATUS i)
 	}
 }
 
+FT260_Data_Bit toFt260DataBit(BYTE dataBit)
+{
+	FT260_Data_Bit ret = FT260_DATA_BIT_8;
+
+	switch (dataBit)
+	{
+		case 7:
+			ret = FT260_DATA_BIT_7;
+			break;
+
+		case 8:
+			ret = FT260_DATA_BIT_8;
+			break;
+	}
+
+	return ret;
+}
+FT260_Stop_Bit toFt260StopBit(BYTE stopBit)
+{
+	FT260_Stop_Bit ret = FT260_STOP_BITS_1;
+
+	switch (stopBit)
+	{
+		case 1:
+			ret = FT260_STOP_BITS_1;
+			break;
+
+		case 2:
+			ret = FT260_STOP_BITS_2;
+			break;
+	}
+
+	return ret;
+}
+FT260_Parity toFt260ParityBit(BYTE parity)
+{
+	FT260_Parity ret = FT260_PARITY_NONE;
+
+	switch (parity)
+	{
+		case NOPARITY:
+			ret = FT260_PARITY_NONE;
+			break;
+
+		case ODDPARITY:
+			ret = FT260_PARITY_ODD;
+			break;
+
+		case EVENPARITY:
+			ret = FT260_PARITY_EVEN;
+			break;
+
+		case MARKPARITY:
+			ret = FT260_PARITY_MARK;
+			break;
+
+		case SPACEPARITY:
+			ret = FT260_PARITY_SPACE;
+			break;
+	}
+
+	return ret;
+}
+
 bool IsFt260DevConnected(void)
 {
 	FT260_STATUS ftStatus = FT260_OTHER_ERROR;
@@ -132,28 +201,89 @@ bool IsFt260DevConnected(void)
 	return ret;
 }
 
+void CloseFt260Handle(FT260_HANDLE handle)
+{
+	FT260_Close(handle);
+	debug_out(("Close FT260 device OK\n"));
+}
+
 FT260_HANDLE OpenFt260Uart(void)
 {
 	FT260_STATUS ftStatus = FT260_OTHER_ERROR;
 	FT260_HANDLE handle = INVALID_HANDLE_VALUE;
 
 	// Open device by Vid/Pid
+	// mode 0 is I2C, mode 1 is UART
 	ftStatus = FT260_OpenByVidPid(FT260_Vid, FT260_Pid, 0, &handle);
-
 	if (FT260_OK != ftStatus)
 	{
 		debug_out(("Open device by vid pid NG, status: %s\n", FT260StatusToString(ftStatus)));
 	}
 	else
 	{
-		debug_out(("Open FT260 device by vid pid OK\n"));
+		debug_out(("Open FT260 device by vid pid OK %p\n", handle));
+	}
+
+	// Show version information
+	DWORD dwChipVersion = 0;
+
+	ftStatus = FT260_GetChipVersion(handle, &dwChipVersion);
+	if (FT260_OK != ftStatus)
+	{
+		debug_out(("Get chip version Failed, status: %s\n", FT260StatusToString(ftStatus)));
+	}
+	else
+	{
+		debug_out(("Get chip version OK\n"));
+		debug_out(("Chip version : %d.%d.%d.%d\n",
+			((dwChipVersion >> 24) & MASK_1),
+			((dwChipVersion >> 16) & MASK_1),
+			((dwChipVersion >> 8) & MASK_1),
+			(dwChipVersion & MASK_1)));
+	}
+
+	ftStatus = FT260_UART_Init(handle);
+	if (FT260_OK != ftStatus)
+	{
+		debug_out(("UART Init NG, status :%s\n", FT260StatusToString(ftStatus)));
+		CloseFt260Handle(handle);
+		return INVALID_HANDLE_VALUE;
+	}
+
+	//config TX_ACTIVE for UART 485
+	ftStatus = FT260_SelectGpioAFunction(handle, FT260_GPIOA_TX_ACTIVE);
+	if (FT260_OK != ftStatus)
+	{
+		debug_out(("UART TX_ACTIVE NG, status : %s\n", FT260StatusToString(ftStatus)));
+		CloseFt260Handle(handle);
+		return INVALID_HANDLE_VALUE;
 	}
 
 	return handle;
 }
 
-void CloseFt260Handle(FT260_HANDLE handle)
+bool ConfigFt260(FT260_HANDLE handle, DWORD baudRate, BYTE parity, BYTE stopBit, BYTE dataBit)
 {
-	FT260_Close(handle);
-	debug_out(("Close FT260 device OK\n"));
+	FT260_STATUS ftStatus = FT260_OTHER_ERROR;
+	UartConfig uartConfig;
+
+	//config UART
+	FT260_UART_SetFlowControl(handle, FT260_UART_XON_XOFF_MODE);
+	ULONG ulBaudrate = baudRate;
+	FT260_UART_SetBaudRate(handle, ulBaudrate);
+	FT260_UART_SetDataCharacteristics(handle, FT260_DATA_BIT_8, FT260_STOP_BITS_1, FT260_PARITY_NONE);
+	FT260_UART_SetBreakOff(handle);
+
+	ftStatus = FT260_UART_GetConfig(handle, &uartConfig);
+	if (FT260_OK != ftStatus)
+	{
+		debug_out(("UART Get config NG : %s\n", FT260StatusToString(ftStatus)));
+	}
+	else
+	{
+		debug_out(("config baud:%ld, ctrl:%d, data_bit:%d, stop_bit:%d, parity:%d, breaking:%d\n",
+			uartConfig.baud_rate, uartConfig.flow_ctrl, uartConfig.data_bit, uartConfig.stop_bit, uartConfig.parity, uartConfig.breaking));
+	}
+
+	return true;
 }

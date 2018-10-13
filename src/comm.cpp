@@ -552,41 +552,53 @@ namespace Common{
 	{
 		SMART_ASSERT(is_opened()).Fatal();
 
-		if (!::GetCommState(get_handle(), &_dcb)){
-			_notifier->msgerr("GetCommState()´íÎó");
-			return false;
-		}
-
-		_dcb.fBinary = TRUE;
-		_dcb.BaudRate = pssc->baud_rate;
-		_dcb.fParity = pssc->parity == NOPARITY ? FALSE : TRUE;
-		_dcb.Parity = pssc->parity;
-		_dcb.ByteSize = pssc->databit;
-		_dcb.StopBits = pssc->stopbit;
-
-		if (!::SetCommState(_hComPort, &_dcb)){
-			_notifier->msgerr("SetCommState()´íÎó");
-			return false;
-		}
-
-		if (!::SetCommMask(get_handle(), 
-			EV_RXCHAR|EV_RXFLAG|EV_TXEMPTY
-			| EV_CTS | EV_DSR | EV_RLSD
-			| EV_BREAK | EV_ERR
-			| EV_RING
-			| EV_PERR | EV_RX80FULL))
+		switch (get_opened_com()->get_type())
 		{
-			_notifier->msgerr("SetCommMask()´íÎó");
-			return false;
-		}
-		if (!::SetCommTimeouts(get_handle(), &_timeouts)){
-			_notifier->msgerr("ÉèÖÃ´®¿Ú³¬Ê±´íÎó");
-			return false;
-		}
+			case Common::t_com_item::comType::COM_NORMAL:
+			{
+				if (!::GetCommState(get_handle(), &_dcb)) {
+					_notifier->msgerr("GetCommState()´íÎó");
+					return false;
+				}
 
-		PurgeComm(_hComPort, PURGE_TXCLEAR | PURGE_TXABORT);
-		PurgeComm(_hComPort, PURGE_RXCLEAR | PURGE_RXABORT);
+				_dcb.fBinary = TRUE;
+				_dcb.BaudRate = pssc->baud_rate;
+				_dcb.fParity = pssc->parity == NOPARITY ? FALSE : TRUE;
+				_dcb.Parity = pssc->parity;
+				_dcb.ByteSize = pssc->databit;
+				_dcb.StopBits = pssc->stopbit;
 
+				if (!::SetCommState(_hComPort, &_dcb)) {
+					_notifier->msgerr("SetCommState()´íÎó");
+					return false;
+				}
+
+				if (!::SetCommMask(get_handle(),
+					EV_RXCHAR | EV_RXFLAG | EV_TXEMPTY
+					| EV_CTS | EV_DSR | EV_RLSD
+					| EV_BREAK | EV_ERR
+					| EV_RING
+					| EV_PERR | EV_RX80FULL))
+				{
+					_notifier->msgerr("SetCommMask()´íÎó");
+					return false;
+				}
+				if (!::SetCommTimeouts(get_handle(), &_timeouts)) {
+					_notifier->msgerr("ÉèÖÃ´®¿Ú³¬Ê±´íÎó");
+					return false;
+				}
+
+				PurgeComm(_hComPort, PURGE_TXCLEAR | PURGE_TXABORT);
+				PurgeComm(_hComPort, PURGE_RXCLEAR | PURGE_RXABORT);
+			}
+			break;
+
+			case Common::t_com_item::comType::COM_FT260:
+			{
+				ConfigFt260(get_handle(), pssc->baud_rate, pssc->parity, pssc->databit, pssc->stopbit);
+			}
+			break;
+		}
 		return true;
 	}
 
