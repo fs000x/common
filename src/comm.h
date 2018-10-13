@@ -134,7 +134,7 @@ namespace Common {
 		// 返回整数部分 : 比如: NOPARITY(宏)
 		int get_i() const {return _i;}
 
-		bool get_type() { return _type; }
+		comType get_type() { return _type; }
 
 	protected:
 		std::string _s;

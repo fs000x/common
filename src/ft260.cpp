@@ -181,11 +181,11 @@ bool IsFt260DevConnected(void)
 		ftStatus = FT260_GetDevicePath(pathBuf, 128, i);
 		if (FT260_OK != ftStatus)
 		{
-			debug_out(("Get Device Path NG, status: %s\n", FT260StatusToString(ftStatus)));
+			debug_out(("FT260 Get Device Path NG, status: %s\n", FT260StatusToString(ftStatus)));
 		}
 		else
 		{
-			wdebug_out((L"Device path:%s \n", pathBuf));
+			wdebug_out((L"FT260 Device path:%s \n", pathBuf));
 		}
 
 		if (false == IsFT260Dev(pathBuf))
@@ -214,10 +214,10 @@ FT260_HANDLE OpenFt260Uart(void)
 
 	// Open device by Vid/Pid
 	// mode 0 is I2C, mode 1 is UART
-	ftStatus = FT260_OpenByVidPid(FT260_Vid, FT260_Pid, 0, &handle);
+	ftStatus = FT260_OpenByVidPid(FT260_Vid, FT260_Pid, 1, &handle);
 	if (FT260_OK != ftStatus)
 	{
-		debug_out(("Open device by vid pid NG, status: %s\n", FT260StatusToString(ftStatus)));
+		debug_out(("FT260 Open device by vid pid NG, status: %s\n", FT260StatusToString(ftStatus)));
 	}
 	else
 	{
@@ -230,12 +230,11 @@ FT260_HANDLE OpenFt260Uart(void)
 	ftStatus = FT260_GetChipVersion(handle, &dwChipVersion);
 	if (FT260_OK != ftStatus)
 	{
-		debug_out(("Get chip version Failed, status: %s\n", FT260StatusToString(ftStatus)));
+		debug_out(("FT260 Get chip version Failed, status: %s\n", FT260StatusToString(ftStatus)));
 	}
 	else
 	{
-		debug_out(("Get chip version OK\n"));
-		debug_out(("Chip version : %d.%d.%d.%d\n",
+		debug_out(("FT260 Chip version : %d.%d.%d.%d\n",
 			((dwChipVersion >> 24) & MASK_1),
 			((dwChipVersion >> 16) & MASK_1),
 			((dwChipVersion >> 8) & MASK_1),
@@ -245,8 +244,19 @@ FT260_HANDLE OpenFt260Uart(void)
 	ftStatus = FT260_UART_Init(handle);
 	if (FT260_OK != ftStatus)
 	{
-		debug_out(("UART Init NG, status :%s\n", FT260StatusToString(ftStatus)));
+		debug_out(("FT260 UART Init NG, status :%s\n", FT260StatusToString(ftStatus)));
 		CloseFt260Handle(handle);
+
+		ftStatus = FT260_OpenByVidPid(FT260_Vid, FT260_Pid, 0, &handle);
+		if (FT260_OK == ftStatus)
+		{
+			ftStatus = FT260_UART_Init(handle);
+			if (FT260_OK != ftStatus)
+			{
+				debug_out(("ReOpen FT260 UART Init NG, status :%s\n", FT260StatusToString(ftStatus)));
+				CloseFt260Handle(handle);
+			}
+		}
 		return INVALID_HANDLE_VALUE;
 	}
 
@@ -254,7 +264,7 @@ FT260_HANDLE OpenFt260Uart(void)
 	ftStatus = FT260_SelectGpioAFunction(handle, FT260_GPIOA_TX_ACTIVE);
 	if (FT260_OK != ftStatus)
 	{
-		debug_out(("UART TX_ACTIVE NG, status : %s\n", FT260StatusToString(ftStatus)));
+		debug_out(("FT260 UART TX_ACTIVE NG, status : %s\n", FT260StatusToString(ftStatus)));
 		CloseFt260Handle(handle);
 		return INVALID_HANDLE_VALUE;
 	}
@@ -277,13 +287,61 @@ bool ConfigFt260(FT260_HANDLE handle, DWORD baudRate, BYTE parity, BYTE stopBit,
 	ftStatus = FT260_UART_GetConfig(handle, &uartConfig);
 	if (FT260_OK != ftStatus)
 	{
-		debug_out(("UART Get config NG : %s\n", FT260StatusToString(ftStatus)));
+		debug_out(("FT260 UART Get config NG : %s\n", FT260StatusToString(ftStatus)));
 	}
 	else
 	{
-		debug_out(("config baud:%ld, ctrl:%d, data_bit:%d, stop_bit:%d, parity:%d, breaking:%d\n",
+		debug_out(("FT260 config baud:%ld, ctrl:%d, data_bit:%d, stop_bit:%d, parity:%d, breaking:%d\n",
 			uartConfig.baud_rate, uartConfig.flow_ctrl, uartConfig.data_bit, uartConfig.stop_bit, uartConfig.parity, uartConfig.breaking));
 	}
 
 	return true;
+}
+
+DWORD GetFt260QueueBytesToRead(FT260_HANDLE handle)
+{
+	DWORD dwAvailableData = 0;
+
+	FT260_UART_GetQueueStatus(handle, &dwAvailableData);
+
+	return dwAvailableData;
+}
+
+BOOL FT260ReadUart(FT260_HANDLE handle, LPVOID lpBuffer, DWORD dwBufferLength, DWORD dwBytesToRead, LPDWORD lpdwBytesReturned)
+{
+	FT260_STATUS ftStatus = FT260_OTHER_ERROR;
+	BOOL ret = FALSE;
+
+	ftStatus = FT260_UART_Read(handle, lpBuffer, dwBufferLength, dwBytesToRead, lpdwBytesReturned);
+	if (FT260_OK != ftStatus)
+	{
+		debug_out(("FT260 UART Read NG : %d\n", ftStatus));
+	}
+	else
+	{
+		debug_out(("FT260 Read bytes : %d\n", *lpdwBytesReturned));
+		ret = TRUE;
+	}
+
+	return ret;
+}
+
+BOOL FT260WriteUart(FT260_HANDLE handle, LPVOID lpBuffer, DWORD dwBufferLength, DWORD dwBytesToWrite, LPDWORD lpdwBytesWritten)
+{
+	FT260_STATUS ftStatus = FT260_OTHER_ERROR;
+	BOOL ret = FALSE;
+
+	// Write data
+	ftStatus = FT260_UART_Write(handle, lpBuffer, dwBufferLength, dwBytesToWrite, lpdwBytesWritten);
+	if (FT260_OK != ftStatus)
+	{
+		debug_out(("FT260 UART Write NG : %d\n", ftStatus));
+	}
+	else
+	{
+		debug_out(("FT260 Write bytes : %d\n", *lpdwBytesWritten));
+		ret = TRUE;
+	}
+
+	return ret;
 }

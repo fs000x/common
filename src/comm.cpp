@@ -179,8 +179,11 @@ namespace Common{
 		while (::WaitForSingleObject(_thread_read.hEventToExit, 0) == WAIT_OBJECT_0);
 		debug_out(("等待 [写线程] 结束...\n"));
 		while (::WaitForSingleObject(_thread_write.hEventToExit, 0) == WAIT_OBJECT_0);
-		debug_out(("等待 [事件线程] 结束...\n"));
-		while (::WaitForSingleObject(_thread_event.hEventToExit, 0) == WAIT_OBJECT_0);
+		if (get_opened_com()->get_type() == get_opened_com()->COM_NORMAL)
+		{
+			debug_out(("等待 [事件线程] 结束...\n"));
+			while (::WaitForSingleObject(_thread_event.hEventToExit, 0) == WAIT_OBJECT_0);
+		}
 
 		return true;
 	}
@@ -218,7 +221,7 @@ namespace Common{
 		SMART_ASSERT(dw == WAIT_OBJECT_0)(dw).Fatal();
 
 		debug_out(("[事件线程] 开始工作...\n"));
-		if (!is_opened()){
+		if (!is_opened() || (get_opened_com()->get_type() == get_opened_com()->COM_FT260)){
 			debug_out(("[事件线程] 没有工作, 退出中...\n"));
 			::SetEvent(_thread_event.hEventToExit);
 			return 0;
@@ -311,56 +314,77 @@ namespace Common{
 			DWORD	nWritten = 0;		// 写操作一次写入的长度
 			int		nWrittenData;		// 当前循环总共写入长度
 
-			for (nWrittenData = 0; nWrittenData < psdp->cb;){
-				bRet = ::WriteFile(_hComPort, &psdp->data[0] + nWrittenData, psdp->cb - nWrittenData, NULL, &overlap);
-				if (bRet != FALSE){ // I/O is completed
-					bRet = ::GetOverlappedResult(_hComPort, &overlap, &nWritten, FALSE);
-					if (bRet){
-						debug_out(("[写线程] I/O completed immediately, bytes : %d\n", nWritten));
-					}
-					else{
-						_notifier->msgerr("[写线程] GetOverlappedResult失败(I/O completed)!\n");
-						goto _restart;
-					}
-				}
-				else{ // I/O is pending						
-					if (::GetLastError() == ERROR_IO_PENDING){
-						HANDLE handles[2];
-						handles[0] = _thread_write.hEventToExit;
-						handles[1] = listener.hEvent;
-
-						switch (::WaitForMultipleObjects(_countof(handles), &handles[0], FALSE, INFINITE))
-						{
-						case WAIT_FAILED:
-							_notifier->msgerr("[写线程] Wait失败!\n");
+			if (get_opened_com()->get_type() == get_opened_com()->COM_NORMAL)
+			{
+				for (nWrittenData = 0; nWrittenData < psdp->cb;) {
+					bRet = ::WriteFile(_hComPort, &psdp->data[0] + nWrittenData, psdp->cb - nWrittenData, NULL, &overlap);
+					if (bRet != FALSE) { // I/O is completed
+						bRet = ::GetOverlappedResult(_hComPort, &overlap, &nWritten, FALSE);
+						if (bRet) {
+							debug_out(("[写线程] I/O completed immediately, bytes : %d\n", nWritten));
+						}
+						else {
+							_notifier->msgerr("[写线程] GetOverlappedResult失败(I/O completed)!\n");
 							goto _restart;
-							break;
-						case WAIT_OBJECT_0 + 0: // now we exit
-							debug_out(("[写线程] 收到退出事件!\n"));
-							goto _restart;
-							break;
-						case WAIT_OBJECT_0 + 1: // the I/O operation is now completed
-							bRet = ::GetOverlappedResult(_hComPort, &overlap, &nWritten, FALSE);
-							if (bRet){
-								debug_out(("[写线程] 写入 %d 个字节!\n", nWritten));
-							}
-							else{
-								_notifier->msgerr("[写线程] GetOverlappedResult失败(I/O pending)!\n");
-								goto _restart;
-							}
-							break;
 						}
 					}
-					else{
-						_notifier->msgerr("[写线程] ::GetLastError() != ERROR_IO_PENDING");
-						goto _restart;
-					}
-				}
+					else { // I/O is pending						
+						if (::GetLastError() == ERROR_IO_PENDING) {
+							HANDLE handles[2];
+							handles[0] = _thread_write.hEventToExit;
+							handles[1] = listener.hEvent;
 
-				nWrittenData += nWritten;
-				_data_counter.add_send(nWritten);
-				_data_counter.sub_unsend(nWritten);
-				_data_counter.call_updater();
+							switch (::WaitForMultipleObjects(_countof(handles), &handles[0], FALSE, INFINITE))
+							{
+							case WAIT_FAILED:
+								_notifier->msgerr("[写线程] Wait失败!\n");
+								goto _restart;
+								break;
+							case WAIT_OBJECT_0 + 0: // now we exit
+								debug_out(("[写线程] 收到退出事件!\n"));
+								goto _restart;
+								break;
+							case WAIT_OBJECT_0 + 1: // the I/O operation is now completed
+								bRet = ::GetOverlappedResult(_hComPort, &overlap, &nWritten, FALSE);
+								if (bRet) {
+									debug_out(("[写线程] 写入 %d 个字节!\n", nWritten));
+								}
+								else {
+									_notifier->msgerr("[写线程] GetOverlappedResult失败(I/O pending)!\n");
+									goto _restart;
+								}
+								break;
+							}
+						}
+						else {
+							_notifier->msgerr("[写线程] ::GetLastError() != ERROR_IO_PENDING");
+							goto _restart;
+						}
+					}
+
+					nWrittenData += nWritten;
+					_data_counter.add_send(nWritten);
+					_data_counter.sub_unsend(nWritten);
+					_data_counter.call_updater();
+				}
+			}
+			else if (get_opened_com()->get_type() == get_opened_com()->COM_FT260)
+			{
+				for (nWrittenData = 0; nWrittenData < psdp->cb;) {
+					bRet = FT260WriteUart(get_handle(), (LPVOID)(&psdp->data[0] + nWrittenData), psdp->cb - nWrittenData, psdp->cb - nWrittenData, &nWritten);
+					if (bRet) {
+						debug_out(("[写线程] I/O completed immediately, bytes : %d\n", nWritten));
+					}
+					else {
+						_notifier->msgerr("[写线程] FT260WriteUart失败(I/O completed)!\n");
+						break;//goto _restart;
+					}
+
+					nWrittenData += nWritten;
+					_data_counter.add_send(nWritten);
+					_data_counter.sub_unsend(nWritten);
+					_data_counter.call_updater();
+				}
 			}
 			_send_data.release(psdp);
 			goto _get_packet;
@@ -432,73 +456,102 @@ namespace Common{
 			break;
 		}
 
-		DWORD nBytesToRead, nRead, nTotalRead;
-		DWORD	comerr;
-		COMSTAT	comsta;
-		// for some reasons, such as comport has been removed
-		if (!::ClearCommError(_hComPort, &comerr, &comsta)){
-			_notifier->msgerr("ClearCommError()");
-			goto _restart;
+		DWORD nBytesToRead=0, nRead=0, nTotalRead=0;
+		if (get_opened_com()->get_type() == get_opened_com()->COM_NORMAL)
+		{
+			DWORD	comerr;
+			COMSTAT	comsta;
+			// for some reasons, such as comport has been removed
+			if (!::ClearCommError(_hComPort, &comerr, &comsta)) {
+				_notifier->msgerr("ClearCommError()");
+				goto _restart;
+			}
+
+			nBytesToRead = comsta.cbInQue;
+			if (nBytesToRead == 0)
+				nBytesToRead++; // would never happen
+
+			if (nBytesToRead > kReadBufSize)
+				nBytesToRead = kReadBufSize;
+
+			for (nTotalRead = 0; nTotalRead < nBytesToRead;) {
+				bRet = ::ReadFile(_hComPort, block_data + nTotalRead, nBytesToRead - nTotalRead, &nRead, &overlap);
+				if (bRet != FALSE) {
+					bRet = ::GetOverlappedResult(_hComPort, &overlap, &nRead, FALSE);
+					if (bRet) {
+						debug_out(("[读线程] 读取 %d 字节, bRet==TRUE, nBytesToRead: %d\n", nRead, nBytesToRead));
+					}
+					else {
+						_notifier->msgerr("[写线程] GetOverlappedResult失败!\n");
+						goto _restart;
+					}
+				}
+				else {
+					if (::GetLastError() == ERROR_IO_PENDING) {
+						HANDLE handles[2];
+						handles[0] = _thread_read.hEventToExit;
+						handles[1] = overlap.hEvent;
+
+						switch (::WaitForMultipleObjects(_countof(handles), &handles[0], FALSE, INFINITE))
+						{
+						case WAIT_FAILED:
+							debug_out(("[读线程] 等待失败!\n"));
+							goto _restart;
+						case WAIT_OBJECT_0 + 0:
+							debug_out(("[读线程] 收到退出事件!\n"));
+							goto _restart;
+						case WAIT_OBJECT_0 + 1:
+							bRet = ::GetOverlappedResult(_hComPort, &overlap, &nRead, FALSE);
+							if (bRet) {
+								debug_out(("[读线程] 读取 %d 字节, bRet==FALSE\n", nRead));
+							}
+							else {
+								_notifier->msgerr("[读线程] GetOverlappedResult失败!\n");
+								goto _restart;
+							}
+							break;
+						}
+					}
+					else {
+						_notifier->msgerr("[读线程] ::GetLastError() != ERROR_IO_PENDING");
+						goto _restart;
+					}
+				}
+
+				if (nRead > 0) {
+					nTotalRead += nRead;
+					_data_counter.add_recv(nRead);
+					_data_counter.call_updater();
+				}
+				else {
+					nBytesToRead--;
+				}
+			}
 		}
+		else if (get_opened_com()->get_type() == get_opened_com()->COM_FT260)
+		{
+			nBytesToRead = GetFt260QueueBytesToRead(get_handle());
+			if (nBytesToRead > kReadBufSize)
+				nBytesToRead = kReadBufSize;
 
-		nBytesToRead = comsta.cbInQue;
-		if (nBytesToRead == 0) 
-			nBytesToRead++; // would never happen
-
-		if (nBytesToRead > kReadBufSize)
-			nBytesToRead = kReadBufSize;
-
-		for (nTotalRead = 0; nTotalRead < nBytesToRead;){
-			bRet = ::ReadFile(_hComPort, block_data + nTotalRead, nBytesToRead - nTotalRead, &nRead, &overlap);
-			if (bRet != FALSE){
-				bRet = ::GetOverlappedResult(_hComPort, &overlap, &nRead, FALSE);
+			for (nTotalRead = 0; nTotalRead < nBytesToRead;) {
+				bRet = FT260ReadUart(get_handle(), (LPVOID)(block_data + nTotalRead), kReadBufSize, nBytesToRead - nTotalRead, &nRead);
 				if (bRet) {
 					debug_out(("[读线程] 读取 %d 字节, bRet==TRUE, nBytesToRead: %d\n", nRead, nBytesToRead));
 				}
-				else{
-					_notifier->msgerr("[写线程] GetOverlappedResult失败!\n");
-					goto _restart;
+				else {
+					_notifier->msgerr("[写线程] FT260ReadUart失败!\n");
+					//goto _restart;
 				}
-			}
-			else{
-				if (::GetLastError() == ERROR_IO_PENDING){
-					HANDLE handles[2];
-					handles[0] = _thread_read.hEventToExit;
-					handles[1] = overlap.hEvent;
 
-					switch (::WaitForMultipleObjects(_countof(handles), &handles[0], FALSE, INFINITE))
-					{
-					case WAIT_FAILED:
-						debug_out(("[读线程] 等待失败!\n"));
-						goto _restart;
-					case WAIT_OBJECT_0 + 0:
-						debug_out(("[读线程] 收到退出事件!\n"));
-						goto _restart;
-					case WAIT_OBJECT_0 + 1:
-						bRet = ::GetOverlappedResult(_hComPort, &overlap, &nRead, FALSE);
-						if (bRet){
-							debug_out(("[读线程] 读取 %d 字节, bRet==FALSE\n", nRead));
-						}
-						else{
-							_notifier->msgerr("[读线程] GetOverlappedResult失败!\n");
-							goto _restart;
-						}
-						break;
-					}
+				if (nRead > 0) {
+					nTotalRead += nRead;
+					_data_counter.add_recv(nRead);
+					_data_counter.call_updater();
 				}
-				else{
-					_notifier->msgerr("[读线程] ::GetLastError() != ERROR_IO_PENDING");
-					goto _restart;
+				else {
+					nBytesToRead--;
 				}
-			}
-
-			if (nRead > 0){
-				nTotalRead += nRead;
-				_data_counter.add_recv(nRead);
-				_data_counter.call_updater();
-			}
-			else{
-				nBytesToRead--;
 			}
 		}
 		call_data_receivers(block_data, nBytesToRead);
