@@ -14,6 +14,7 @@
     <ProjectGuid>{48044534-EFEB-44FC-A3AC-1202AE28AD95}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>common</RootNamespace>
+    <WindowsTargetPlatformVersion>7.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -60,7 +61,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src;..\LibFT260\inc</AdditionalIncludeDirectories>
       <TreatSpecificWarningsAsErrors>4701;4706;%(TreatSpecificWarningsAsErrors)</TreatSpecificWarningsAsErrors>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <BrowseInformation>false</BrowseInformation>
@@ -68,9 +69,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>setupapi.lib;imm32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
+      <AdditionalDependencies>setupapi.lib;imm32.lib;..\LibFT260\lib\LibFT260.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\LibFT260\lib</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>..\res\xps.manifest</AdditionalManifestFiles>
