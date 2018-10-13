@@ -2,8 +2,10 @@
 
 #ifdef _DEBUG
 #define debug_out(x) printf##x
+#define wdebug_out(x) wprintf##x
 #else
 #define debug_out(x) 
+#define wdebug_out(x)
 #endif
 
 

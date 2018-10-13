@@ -4,13 +4,14 @@ static char* __THIS_FILE__ = __FILE__;
 
 #include "comm.h"
 #include "data.h"
+#include "ft260.h"
 
 namespace Common{
 	//////////////////////////////////////////////////////////////////////////
 	std::string c_comport::get_id_and_name() const
 	{
 		char idstr[17] = {0};
-		_snprintf(idstr, sizeof(idstr), "COM%-13d", _i);
+		_snprintf(idstr, sizeof(idstr), "COM%-5d", _i);
 		std::stringstream ss;
 		ss << idstr << "\t\t" << _s;
 		return std::string(ss.str());
@@ -46,6 +47,9 @@ namespace Common{
 			}
 		}
 		SetupDiDestroyDeviceInfoList(hDevInfo);
+
+		if (IsFt260DevConnected())
+			add(c_comport(-1, "FT260", Common::t_com_item::comType::COM_FT260));
 
 		return this;
 	}
@@ -87,17 +91,30 @@ namespace Common{
 		_end_threads();
 	}
 
-	bool CComm::open(int com_id)
+	bool CComm::open(t_com_item* com)
 	{
 		if (is_opened()){
 			SMART_ASSERT("com was opened!" && 0).Fatal();
 			return false;
 		}
 
-		char str[64];
-		sprintf(str, "\\\\.\\COM%d", com_id);
-		_hComPort = ::CreateFile(str, GENERIC_READ | GENERIC_WRITE, 0, NULL,
-			OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+		switch (com->get_type())
+		{
+			case com->COM_NORMAL:
+			{
+				char str[64];
+				sprintf(str, "\\\\.\\COM%d", com->get_i());
+				_hComPort = ::CreateFile(str, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+					OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+			}
+			break;
+
+			case com->COM_FT260:
+			{
+				_hComPort = OpenFt260Uart();
+			}
+			break;
+		}
 		if (_hComPort == INVALID_HANDLE_VALUE){
 			_hComPort = NULL;
 			DWORD dwErr = ::GetLastError();
@@ -107,6 +124,7 @@ namespace Common{
 			}
 			return false;
 		}
+		_openedCom = com;
 
 
 		return true;
@@ -114,8 +132,18 @@ namespace Common{
 
 	bool CComm::close()
 	{
-		SMART_ENSURE(::CloseHandle(_hComPort), != 0).Fatal();
+		switch (_openedCom->get_type())
+		{
+			case Common::t_com_item::comType::COM_NORMAL:
+				SMART_ENSURE(::CloseHandle(_hComPort), != 0).Fatal();
+			break;
+
+			case Common::t_com_item::comType::COM_FT260:
+				CloseFt260Handle(_hComPort);
+			break;
+		}
 		_hComPort = NULL;
+		_openedCom = NULL;
 		_data_counter.reset_all();
 		_send_data.empty();
 

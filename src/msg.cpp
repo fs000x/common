@@ -742,7 +742,7 @@ namespace Common {
 			return false;
 		}
 
-		return _comm.open(pi->get_i());
+		return _comm.open(pi);
 	}
 
 	void CComWnd::com_add_prompt_if_no_cp_presents()

@@ -123,16 +123,23 @@ namespace Common {
 	class t_com_item
 	{
 	public:
-		t_com_item(int i,const char* s){_s = s; _i=i;}
+		enum comType {
+			COM_NORMAL,
+			COM_FT260,
+		};
+		t_com_item(int i, const char* s, comType type=COM_NORMAL) { _s = s; _i = i; _type = type; }
 
 		// 返回字符串部分: 比如: 无校验位
 		std::string get_s() const {return _s;}
 		// 返回整数部分 : 比如: NOPARITY(宏)
 		int get_i() const {return _i;}
 
+		bool get_type() { return _type; }
+
 	protected:
 		std::string _s;
 		int _i;
+		comType _type;
 	};
 
 	// 刷新串口对象列表时需要用到的回调函数类型
@@ -176,8 +183,8 @@ namespace Common {
 	class c_comport : public t_com_item
 	{
 	public:
-		c_comport(int id,const char* s)
-			: t_com_item(id, s)
+		c_comport(int id,const char* s, comType type=COM_NORMAL)
+			: t_com_item(id, s, type)
 		{}
 
 		std::string get_id_and_name() const;
@@ -436,10 +443,12 @@ namespace Common {
 	// 外部相关操作接口
 	private:
 		HANDLE		_hComPort;
+		t_com_item* _openedCom;
 	public:
-		bool		open(int com_id);
+		bool		open(t_com_item* com);
 		bool		close();
 		HANDLE		get_handle() { return _hComPort; }
+		t_com_item* get_opened_com() { return _openedCom; }
 		bool		is_opened() { 
 			return !!_hComPort; 
 		}
