@@ -444,16 +444,19 @@ namespace Common{
 		handles[1] = listener.hEvent;
 
 	_get_packet:
-		switch (::WaitForMultipleObjects(_countof(handles), handles, FALSE, INFINITE))
+		if (get_opened_com()->get_type() == get_opened_com()->COM_NORMAL)
 		{
-		case WAIT_FAILED:
-			_notifier->msgerr("[读线程] Wait失败!\n");
-			goto _restart;
-		case WAIT_OBJECT_0 + 0:
-			debug_out(("[读线程] 收到退出事件!\n"));
-			goto _restart;
-		case WAIT_OBJECT_0 + 1:
-			break;
+			switch (::WaitForMultipleObjects(_countof(handles), handles, FALSE, INFINITE))
+			{
+			case WAIT_FAILED:
+				_notifier->msgerr("[读线程] Wait失败!\n");
+				goto _restart;
+			case WAIT_OBJECT_0 + 0:
+				debug_out(("[读线程] 收到退出事件!\n"));
+				goto _restart;
+			case WAIT_OBJECT_0 + 1:
+				break;
+			}
 		}
 
 		DWORD nBytesToRead=0, nRead=0, nTotalRead=0;
@@ -553,6 +556,7 @@ namespace Common{
 					nBytesToRead--;
 				}
 			}
+			Sleep(10);
 		}
 		call_data_receivers(block_data, nBytesToRead);
 		goto _get_packet;
