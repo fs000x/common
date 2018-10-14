@@ -377,7 +377,7 @@ namespace Common{
 					}
 					else {
 						_notifier->msgerr("[写线程] FT260WriteUart失败(I/O completed)!\n");
-						break;//goto _restart;
+						goto _restart;
 					}
 
 					nWrittenData += nWritten;
@@ -442,21 +442,23 @@ namespace Common{
 		HANDLE handles[2];
 		handles[0] = _thread_read.hEventToExit;
 		handles[1] = listener.hEvent;
+		DWORD dwMilliseconds = INFINITE;
+		if (get_opened_com()->get_type() == get_opened_com()->COM_FT260)
+		{
+			dwMilliseconds = 10;
+		}
 
 	_get_packet:
-		if (get_opened_com()->get_type() == get_opened_com()->COM_NORMAL)
+		switch (::WaitForMultipleObjects(_countof(handles), handles, FALSE, dwMilliseconds))
 		{
-			switch (::WaitForMultipleObjects(_countof(handles), handles, FALSE, INFINITE))
-			{
-			case WAIT_FAILED:
-				_notifier->msgerr("[读线程] Wait失败!\n");
-				goto _restart;
-			case WAIT_OBJECT_0 + 0:
-				debug_out(("[读线程] 收到退出事件!\n"));
-				goto _restart;
-			case WAIT_OBJECT_0 + 1:
-				break;
-			}
+		case WAIT_FAILED:
+			_notifier->msgerr("[读线程] Wait失败!\n");
+			goto _restart;
+		case WAIT_OBJECT_0 + 0:
+			debug_out(("[读线程] 收到退出事件!\n"));
+			goto _restart;
+		case WAIT_OBJECT_0 + 1:
+			break;
 		}
 
 		DWORD nBytesToRead=0, nRead=0, nTotalRead=0;
@@ -544,7 +546,7 @@ namespace Common{
 				}
 				else {
 					_notifier->msgerr("[写线程] FT260ReadUart失败!\n");
-					//goto _restart;
+					goto _restart;
 				}
 
 				if (nRead > 0) {
@@ -725,7 +727,8 @@ namespace Common{
 		// 等待线程完全退出
 		::WaitForSingleObject(_thread_read.hEventToExit, INFINITE);
 		::WaitForSingleObject(_thread_write.hEventToExit, INFINITE);
-		::WaitForSingleObject(_thread_event.hEventToExit, INFINITE);
+		//if (get_opened_com()->get_type() == get_opened_com()->COM_NORMAL) //Exception thrown: read access violation. this was nullptr.
+		::WaitForSingleObject(_thread_event.hEventToExit, 500);//fix ft260 close windows INFINITE);
 
 		::CloseHandle(_thread_read.hEventToBegin);
 		::CloseHandle(_thread_read.hEventToExit);
