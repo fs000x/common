@@ -80,6 +80,8 @@ typedef signed long   int32;
 #define I2CM_IDLE(status)            (((status) & 0x20) != 0)
 #define I2CM_BUS_BUSY(status)        (((status) & 0x40) != 0)
 
+#define DEBUGF_OD       1
+
 enum FT260_STATUS
 {
     FT260_OK,
@@ -99,6 +101,9 @@ enum FT260_STATUS
     FT260_RX_NO_DATA,
     FT260_GPIO_WRONG_DIRECTION,
     FT260_INVALID_DEVICE,
+    FT260_INVALID_OPEN_DRAIN_SET,
+    FT260_INVALID_OPEN_DRAIN_RESET,
+	FT260_I2C_READ_FAIL,
     FT260_OTHER_ERROR
 };
 
@@ -200,7 +205,7 @@ struct FT260_GPIO_Report
 enum FT260_GPIO_DIR
 {
     FT260_GPIO_IN = 0,
-    FT260_GPIO_OUT
+    FT260_GPIO_OUT,
 };
 
 enum FT260_GPIO
@@ -261,6 +266,15 @@ typedef struct
 } UartConfig;
 #pragma pack(pop)
 
+typedef struct {
+    WORD gpio_en;     // GPIO0~5 pin enable
+    WORD gpio_dir;    // GPIO0~5 directions
+    WORD gpio_OD_en;  // GPIO0~5 open drain enable
+    WORD gpioN_en;    // GPIOA~H pin enable
+    WORD gpioN_dir;   // GPIOA~H directions
+} FT260_PinStatus;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -290,11 +304,12 @@ LIBFT260_API FT260_STATUS WINAPI FT260_GetLibVersion(LPDWORD lpdwLibVersion);
 
 LIBFT260_API FT260_STATUS WINAPI FT260_EnableI2CPin(FT260_HANDLE ft260Handle, BOOL enable);
 LIBFT260_API FT260_STATUS WINAPI FT260_SetUartToGPIOPin(FT260_HANDLE ft260Handle);
+LIBFT260_API FT260_STATUS WINAPI FT260_ResetGPIOToUart(FT260_HANDLE handle);
 LIBFT260_API FT260_STATUS WINAPI FT260_EnableDcdRiPin(FT260_HANDLE ft260Handle, BOOL enable);
 
 // FT260 I2C Functions
 LIBFT260_API FT260_STATUS WINAPI FT260_I2CMaster_Init(FT260_HANDLE ft260Handle, uint32 kbps);
-LIBFT260_API FT260_STATUS WINAPI FT260_I2CMaster_Read(FT260_HANDLE ft260Handle, uint8 deviceAddress, FT260_I2C_FLAG flag, LPVOID lpBuffer, DWORD dwBytesToRead, LPDWORD lpdwBytesReturned);
+LIBFT260_API FT260_STATUS WINAPI FT260_I2CMaster_Read(FT260_HANDLE handle, uint8 deviceAddress, FT260_I2C_FLAG flag, LPVOID lpBuffer, DWORD dwBytesToRead, LPDWORD lpdwBytesReturned, DWORD wait_timer = 5000);
 LIBFT260_API FT260_STATUS WINAPI FT260_I2CMaster_Write(FT260_HANDLE ft260Handle, uint8 deviceAddress, FT260_I2C_FLAG flag, LPVOID lpBuffer, DWORD dwBytesToWrite, LPDWORD lpdwBytesWritten);
 LIBFT260_API FT260_STATUS WINAPI FT260_I2CMaster_GetStatus(FT260_HANDLE ft260Handle, uint8* status);
 LIBFT260_API FT260_STATUS WINAPI FT260_I2CMaster_Reset(FT260_HANDLE ft260Handle);
@@ -325,11 +340,15 @@ LIBFT260_API FT260_STATUS WINAPI FT260_CleanInterruptFlag(FT260_HANDLE ft260Hand
 
 // FT260 GPIO Functions
 LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Set(FT260_HANDLE ft260Handle, FT260_GPIO_Report report);
-LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Get(FT260_HANDLE ft260Handle, FT260_GPIO_Report *report);
+LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Get(FT260_HANDLE ft260Handle, FT260_GPIO_Report* report);
 LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_SetDir(FT260_HANDLE ft260Handle, WORD pinNum, BYTE dir);
 LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Read(FT260_HANDLE ft260Handle, WORD pinNum, BYTE* pValue);
 LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Write(FT260_HANDLE ft260Handle, WORD pinNum, BYTE value);
 
+// FT260 GPIO open drain
+LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Set_OD( FT260_HANDLE handle, BYTE pins);
+LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Reset_OD( FT260_HANDLE handle, WORD pinNum, BYTE dir, BYTE value);
+LIBFT260_API FT260_STATUS WINAPI FT260_GPIO_Config_Get(FT260_PinStatus* pinReport);
 #ifdef __cplusplus
 }
 #endif

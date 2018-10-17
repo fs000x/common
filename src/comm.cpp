@@ -445,7 +445,7 @@ namespace Common{
 		DWORD dwMilliseconds = INFINITE;
 		if (get_opened_com()->get_type() == get_opened_com()->COM_FT260)
 		{
-			dwMilliseconds = 10;
+			dwMilliseconds = 1;
 		}
 
 	_get_packet:

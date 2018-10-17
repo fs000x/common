@@ -278,7 +278,7 @@ bool ConfigFt260(FT260_HANDLE handle, DWORD baudRate, BYTE parity, BYTE stopBit,
 	UartConfig uartConfig;
 
 	//config UART
-	FT260_UART_SetFlowControl(handle, FT260_UART_XON_XOFF_MODE);
+	FT260_UART_SetFlowControl(handle, FT260_UART_NO_FLOW_CTRL_MODE);
 	ULONG ulBaudrate = baudRate;
 	FT260_UART_SetBaudRate(handle, ulBaudrate);
 	FT260_UART_SetDataCharacteristics(handle, FT260_DATA_BIT_8, FT260_STOP_BITS_1, FT260_PARITY_NONE);
