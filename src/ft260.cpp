@@ -255,9 +255,9 @@ FT260_HANDLE OpenFt260Uart(void)
 			{
 				debug_out(("ReOpen FT260 UART Init NG, status :%s\n", FT260StatusToString(ftStatus)));
 				CloseFt260Handle(handle);
+				return INVALID_HANDLE_VALUE;
 			}
 		}
-		return INVALID_HANDLE_VALUE;
 	}
 
 	//config TX_ACTIVE for UART 485
