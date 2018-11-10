@@ -207,21 +207,24 @@ void CloseFt260Handle(FT260_HANDLE handle)
 	debug_out(("Close FT260 device OK\n"));
 }
 
-FT260_HANDLE OpenFt260Uart(void)
+FT260_HANDLE OpenFt260Uart(WCHAR *path)
 {
 	FT260_STATUS ftStatus = FT260_OTHER_ERROR;
 	FT260_HANDLE handle = INVALID_HANDLE_VALUE;
 
 	// Open device by Vid/Pid
 	// mode 0 is I2C, mode 1 is UART
-	ftStatus = FT260_OpenByVidPid(FT260_Vid, FT260_Pid, 1, &handle);
+	//ftStatus = FT260_OpenByVidPid(FT260_Vid, FT260_Pid, 1, &handle);
+	ftStatus = FT260_OpenByDevicePath(path, &handle);
 	if (FT260_OK != ftStatus)
 	{
-		debug_out(("FT260 Open device by vid pid NG, status: %s\n", FT260StatusToString(ftStatus)));
+		//debug_out(("FT260 Open device by vid pid NG, status: %s\n", FT260StatusToString(ftStatus)));
+		debug_out(("FT260 Open device by Device Path NG, status: %s\n", FT260StatusToString(ftStatus)));
 	}
 	else
 	{
-		debug_out(("Open FT260 device by vid pid OK %p\n", handle));
+		//debug_out(("Open FT260 device by vid pid OK %p\n", handle));
+		debug_out(("Open FT260 device by Device Path OK %p\n", handle));
 	}
 
 	// Show version information
@@ -246,18 +249,7 @@ FT260_HANDLE OpenFt260Uart(void)
 	{
 		debug_out(("FT260 UART Init NG, status :%s\n", FT260StatusToString(ftStatus)));
 		CloseFt260Handle(handle);
-
-		ftStatus = FT260_OpenByVidPid(FT260_Vid, FT260_Pid, 0, &handle);
-		if (FT260_OK == ftStatus)
-		{
-			ftStatus = FT260_UART_Init(handle);
-			if (FT260_OK != ftStatus)
-			{
-				debug_out(("ReOpen FT260 UART Init NG, status :%s\n", FT260StatusToString(ftStatus)));
-				CloseFt260Handle(handle);
-				return INVALID_HANDLE_VALUE;
-			}
-		}
+		return INVALID_HANDLE_VALUE;
 	}
 
 	//config TX_ACTIVE for UART 485

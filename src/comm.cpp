@@ -5,6 +5,7 @@ static char* __THIS_FILE__ = __FILE__;
 #include "comm.h"
 #include "data.h"
 #include "ft260.h"
+#include <comdef.h>
 
 namespace Common{
 	//////////////////////////////////////////////////////////////////////////
@@ -48,8 +49,39 @@ namespace Common{
 		}
 		SetupDiDestroyDeviceInfoList(hDevInfo);
 
-		if (IsFt260DevConnected())
-			add(c_comport(-1, "FT260", Common::t_com_item::comType::COM_FT260));
+		{
+			FT260_STATUS ftStatus = FT260_OTHER_ERROR;
+			DWORD devNum = 0;
+			WCHAR pathBuf[128];
+
+			FT260_CreateDeviceList(&devNum);
+			debug_out(("Number of devices : %d\n\n", devNum));
+
+			for (DWORD i = 0; i < devNum; i++)
+			{
+				// Get device path and open device by device path
+				ftStatus = FT260_GetDevicePath(pathBuf, 128, i);
+				if (FT260_OK != ftStatus)
+				{
+					debug_out(("FT260 Get Device Path NG, status: %s\n", FT260StatusToString(ftStatus)));
+				}
+				else
+				{
+					wdebug_out((L"FT260 Device path:%s \n", pathBuf));
+				}
+
+				if (false == IsFT260Dev(pathBuf))
+				{
+					debug_out(("Not FT260 device\n"));
+				}
+				else
+				{
+					_bstr_t b(pathBuf);
+					const char *c = b;
+					add(c_comport(-1-i, c, Common::t_com_item::comType::COM_FT260));
+				}
+			}
+		}
 
 		return this;
 	}
@@ -111,7 +143,14 @@ namespace Common{
 
 			case com->COM_FT260:
 			{
-				_hComPort = OpenFt260Uart();
+				std::string p = com->get_s();
+				debug_out(("Try Open FT260 as Uart %s\n", com->get_s().c_str()));
+				unsigned len = p.size() * 2;
+				setlocale(LC_CTYPE, "");
+				wchar_t* path = new wchar_t[len];
+				mbstowcs(path, p.c_str(), len);
+				_hComPort = OpenFt260Uart(path);
+				delete[] path;
 			}
 			break;
 		}
